@@ -90,12 +90,13 @@ export const deleteSubscription = (mp_id: string) => {
 }
 
 // 更新订阅公众号文章列表 
-export const UpdateMps = (mp_id: string,params: { start_page?: number; end_page?: number }) => {
+export const UpdateMps = (mp_id: string,params: { start_page?: number; end_page?: number; backfill?: boolean }) => {
    const apiParams = {
     start_page: (params?.start_page || 0),
-    end_page: params?.end_page || 1
+    end_page: params?.end_page || 1,
+    backfill: !!params?.backfill
   }
-  return http.get<{code: number, message: string}>(`/wx/mps/update/${mp_id||'all'}?start_page=${apiParams.start_page}&end_page=${apiParams.end_page}`)
+  return http.get<{code: number, message: string}>(`/wx/mps/update/${mp_id||'all'}?start_page=${apiParams.start_page}&end_page=${apiParams.end_page}&backfill=${apiParams.backfill}`)
 }
 
 // 更新订阅公众号信息

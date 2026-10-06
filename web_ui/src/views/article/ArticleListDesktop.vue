@@ -254,6 +254,10 @@
               <a-form-item label="结束页" field="endPage">
                 <a-input-number v-model="refreshForm.endPage" :min="1" />
               </a-form-item>
+              <a-form-item label="回补历史" field="backfill">
+                <a-switch v-model="refreshForm.backfill" />
+                <div class="refresh-backfill-tip">开启后翻页不因已入库文章而停止，逐页回补该公众号的全部历史文章</div>
+              </a-form-item>
             </a-form>
             <template #footer>
               <a-button @click="refreshModalVisible = false">取消</a-button>
@@ -1072,7 +1076,8 @@ const handleCleanOldArticles = async () => {
 const refreshModalVisible = ref(false)
 const refreshForm = ref({
   startPage: 0,
-  endPage: 1
+  endPage: 1,
+  backfill: false
 })
 const refreshRules = {
   startPage: [{ required: true, message: '请输入开始页码' }],
@@ -1087,7 +1092,8 @@ const handleRefresh = () => {
   fullLoading.value = true
   UpdateMps(activeMpId.value, {
     start_page: refreshForm.value.startPage,
-    end_page: refreshForm.value.endPage
+    end_page: refreshForm.value.endPage,
+    backfill: refreshForm.value.backfill
   }).then((res: any) => {
     // 接口已同步完成采集，立即刷新列表展示新文章
     const count = res?.total ?? res?.data?.total
@@ -1545,6 +1551,13 @@ const toggleFavoriteStatus = async (record: any) => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.refresh-backfill-tip {
+  font-size: 12px;
+  color: var(--color-text-3);
+  line-height: 1.5;
+  margin-top: 4px;
 }
 
 .article-list :deep(.arco-layout) {
