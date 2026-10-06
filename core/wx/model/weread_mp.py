@@ -339,12 +339,17 @@ class MpsWereadMP(MpsWeread):
         MaxPage: int,
         CallBack=None,
         Item_Over_CallBack=None,
+        backfill: bool = False,
     ) -> int:
         """增量补抓：翻页扫描文章列表，采集所有尚未入库的文章。
 
         停止条件（满足其一即停止翻页）：
         - 遇到已入库的文章（``_is_article_gathered``，以 articles 表为已采记录的唯一权威）
         - 列表翻完（空页）或达到 ``weread.mp_max_pages`` 页数上限
+
+        ``backfill=True`` 时进入全量回补模式：不以已入库文章为边界、不受
+        ``weread.mp_max_pages`` 上限约束，持续翻页直到列表翻空或扫完
+        ``MaxPage - start_page`` 页，用于补抓订阅号的全部历史文章。
 
         注意：不以 ``Feed.update_time`` 作为停止边界。cover 兜底模式会把
         **抓取时间**（而非文章发布时间）写入 update_time，若按时间停止，
@@ -362,12 +367,16 @@ class MpsWereadMP(MpsWeread):
         content_failures = []
         previous_update_time = self._get_feed_update_time(Mps_id)
         requested_pages = end_page - start_page
-        page_limit = (
-            self._get_catchup_page_limit(requested_pages)
-            if previous_update_time
-            else requested_pages
-        )
-        reached_gathered = not previous_update_time
+        if backfill:
+            page_limit = requested_pages
+            reached_gathered = True
+        else:
+            page_limit = (
+                self._get_catchup_page_limit(requested_pages)
+                if previous_update_time
+                else requested_pages
+            )
+            reached_gathered = not previous_update_time
         content_request_count = 0
         content_interval = self._get_content_interval()
         page_interval = self._get_page_interval()
@@ -414,21 +423,29 @@ class MpsWereadMP(MpsWeread):
                 break
             # WeRead defines offset in top-level review groups, not subReviews.
             offset += group_count
-            if previous_update_time and reached_gathered:
+            if previous_update_time and reached_gathered and not backfill:
                 break
 
         if content_failures:
-            raise WereadMPAPIError(
-                "content_incomplete",
-                f"{len(content_failures)} article bodies could not be fetched",
-            )
+            # 回补历史时正文抓取失败很常见（文章被删/不可见），只告警不中断，
+            # 否则一次长翻页任务会因个别死链被判定为失败。
+            if backfill:
+                print_warning(
+                    f"[{Mps_title}] 回补完成，但 {len(content_failures)} 篇正文抓取失败"
+                )
+            else:
+                raise WereadMPAPIError(
+                    "content_incomplete",
+                    f"{len(content_failures)} article bodies could not be fetched",
+                )
         if not reached_gathered:
             raise WereadMPAPIError(
                 "backlog_incomplete",
                 f"catch-up did not reach any gathered article after {page_limit} pages",
             )
 
-        print_info(f"[{Mps_title}] 增量补抓完成: 新增 {new_count} 篇")
+        action = "全量回补" if backfill else "增量补抓"
+        print_info(f"[{Mps_title}] {action}完成: 新增 {new_count} 篇")
         return latest_publish_time or previous_update_time
 
     def get_Articles(
@@ -443,6 +460,7 @@ class MpsWereadMP(MpsWeread):
         Gather_Content=False,
         Item_Over_CallBack=None,
         Over_CallBack=None,
+        backfill: bool = False,
     ):
         """Collect one existing WeChat feed without changing its RSS identity.
 
@@ -450,6 +468,9 @@ class MpsWereadMP(MpsWeread):
         采集所有尚未入库的文章，遇到已入库文章即停止（上一轮到这一轮之间漏采的
         文章会一并补齐）。列表接口不可用（如 -2012 登录超时 / -2041 等）时回退到
         ``/api/mp/cover`` 只取最新一篇的兜底逻辑，保证采集不中断。
+
+        ``backfill=True`` 时切换为全量回补：翻页不因已入库文章而停止，用于抓取
+        订阅号的全部历史文章（页数由 ``start_page``/``MaxPage`` 控制）。
         """
         self.articles = []
         self.aids = []
@@ -499,11 +520,13 @@ class MpsWereadMP(MpsWeread):
                     MaxPage,
                     CallBack=CallBack,
                     Item_Over_CallBack=Item_Over_CallBack,
+                    backfill=backfill,
                 )
             except WereadMPAPIError as exc:
-                if self.response_valid:
+                if self.response_valid or backfill:
                     # 列表接口本身可用（已成功翻页），属于正文缺失或补抓不完整
                     # 等真实错误，直接上抛，下次任务重试。
+                    # 回补模式下绝不静默回退到「仅取最新一篇」，否则会误报已抓全。
                     raise
                 print_warning(
                     f"[{Mps_title}] 文章列表接口不可用({exc})，回退到仅取最新一篇"

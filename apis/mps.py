@@ -344,6 +344,7 @@ async def update_mps(
      mp_id: str,
      start_page: int = 0,
      end_page: int = 1,
+     backfill: bool = False,
     current_user: dict = Depends(get_current_user_or_ak)
 ):
     session = DB.get_session()
@@ -378,6 +379,7 @@ async def update_mps(
                 CallBack=UpdateArticle,
                 start_page=start_page,
                 MaxPage=end_page,
+                backfill=backfill,
             )
         except Exception as e:
             err = str(e)
