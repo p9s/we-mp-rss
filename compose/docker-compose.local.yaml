@@ -1,0 +1,39 @@
+# 用本地代码构建并运行（SQLite 单机版，不依赖 MySQL/Redis/singbox）
+#
+#   docker compose -f compose/docker-compose.local.yaml up -d --build
+#   docker compose -f compose/docker-compose.local.yaml logs -f
+#
+# 与 ../run.sh 的 ./data 是同一目录（保留 wx.lic 登录态与 db.db），可用 WX_RSS_DATA 覆盖；
+# ../.env 存在时自动加载，缺失也不会导致 compose 报错。
+services:
+  we-mp-rss:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        # 宿主代理出口被清华 PyPI 拒绝(403)，构建期换阿里云源；
+        # Dockerfile 里该 ARG 默认仍是清华源，不影响其它构建方式
+        PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple
+    image: we-mp-rss:local
+    container_name: we-mp-rss-local
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8001}:8001"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      - "DB=${DB:-sqlite:///./data/db.db}"
+      - "USERNAME=${USERNAME:-admin}"
+      - "PASSWORD=${PASSWORD:-admin@123}"
+      - "ENABLE_JOB=${ENABLE_JOB:-True}"
+      - "LOG_LEVEL=${LOG_LEVEL:-INFO}"
+      - "PROXY_ENABLED=${PROXY_ENABLED:-False}"
+      - "PROXY_HTTP_URL=${PROXY_HTTP_URL:-}"
+      # 注意：程序从环境变量 GATHER.MODEL（带点）读取采集模式；Docker 会丢弃
+      # environment 映射形式的点号键，必须用列表字符串显式传入「键=值」。
+      - "GATHER.MODEL=${GATHER_MODEL:-weread_mp}"
+    volumes:
+      - ${WX_RSS_DATA:-../../data}:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
