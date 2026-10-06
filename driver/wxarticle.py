@@ -144,6 +144,9 @@ class WXArticleFetcher:
                 article_type = await self._detect_article_type(page)
                 info["article_type"] = article_type
 
+                # 获取内容前先清掉正文末尾的 UI 弹层（赞赏/名片等），避免混入界面文字
+                await self._remove_wechat_ui_junk(page)
+
                 # 获取内容
                 content = await page.locator('#js_content').inner_html()
                 if not content:
@@ -344,6 +347,33 @@ class WXArticleFetcher:
         except Exception as e:
             print_warning(f"等待图片加载时出错: {e}")
             
+    async def _remove_wechat_ui_junk(self, page):
+        """移除微信正文 DOM 中混入的 UI 壳层（赞赏/分享/名片等底部弹层组件）。
+
+        新版微信文章页会把「赞赏金额」「赠予作者」「关注名片」等弹层直接渲染在
+        ``#js_content`` 末尾，导致采回的正文末尾混入大量界面文字（关闭/更多/
+        最低赞赏 ¥0/1..9/广东 等）。这些组件位于固定容器内，按选择器整棵删除，
+        从而保留纯正文。
+        """
+        try:
+            await page.evaluate(
+                """() => {
+                    const selectors = [
+                        '.wx_bottom_modal_group',
+                        'div.rich_media_tool',
+                        '.rich_media_area_extra',
+                        '#js_bottom_opr',
+                        'div.rich_media_meta_list',
+                    ];
+                    for (const sel of selectors) {
+                        document.querySelectorAll(sel).forEach(el => el.remove());
+                    }
+                }"""
+            )
+            print_info("已移除微信正文页 UI 弹层组件")
+        except Exception as e:
+            print_warning(f"移除微信 UI 弹层组件失败: {e}")
+
     async def _extract_publish_time(self, page) -> int:
         """
         提取发布时间(异步)
