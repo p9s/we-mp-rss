@@ -1,7 +1,9 @@
 # 请别再加前端编译了，前端编译非常占用工作流时间 ,可以 编译后复制到static目录再提交pull request
 FROM --platform=$BUILDPLATFORM ghcr.io/rachelos/base-full:latest AS runtime
 
-ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+# 构建期可用 --build-arg PIP_INDEX_URL=... 换源（默认清华源）
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 ENV INSTALL=True
 ENV BROWSER_TYPE=webkit
 ENV PLANT_PATH=/app/env
