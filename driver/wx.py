@@ -492,7 +492,14 @@ class Wx:
                     if (!img) return false;
                     const style = window.getComputedStyle(img);
                     if (style.display === 'none' || style.visibility === 'hidden') return false;
-                    return !!img.src && img.complete && img.naturalWidth > 50;
+                    if (!img.src || !img.complete || img.naturalWidth <= 50) return false;
+                    // 父容器可能是 display:none（经典二维码被快捷登录模式隐藏），
+                    // 只看 img 自身样式会误判就绪，导致后续元素截图超时
+                    if (typeof img.checkVisibility === 'function') {
+                        return img.checkVisibility({checkVisibilityCSS: true, contentVisibilityAuto: true, opacityProperty: true});
+                    }
+                    const rect = img.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
                 }""", qr_tag)
             if ready:
                 return True
@@ -564,7 +571,32 @@ class Wx:
             print(f"code_src:{code_src}")
 
             # 使用Playwright截图功能（添加异常处理）
-            await qrcode.screenshot(path=self.wx_login_url)
+            try:
+                await qrcode.screenshot(path=self.wx_login_url, timeout=15000)
+            except Exception as e:
+                # 页面重渲染会让已取到的元素句柄失效，重新定位后再截一次；
+                # 仍失败则直接用页面上下文拉取二维码原图，避免整个登录流程中断
+                print_warning(f"二维码元素截图失败({type(e).__name__})，使用兜底方式获取...")
+                qrcode = await page.query_selector(qr_tag)
+                saved = False
+                if qrcode is not None and await qrcode.is_visible():
+                    try:
+                        await qrcode.screenshot(path=self.wx_login_url, timeout=15000)
+                        saved = True
+                    except Exception:
+                        saved = False
+                if not saved:
+                    import base64
+                    b64 = await page.evaluate(
+                        """async (s) => {
+                            const r = await fetch(s);
+                            const buf = new Uint8Array(await r.arrayBuffer());
+                            let bin = '';
+                            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+                            return btoa(bin);
+                        }""", code_src)
+                    with open(self.wx_login_url, "wb") as f:
+                        f.write(base64.b64decode(b64))
 
             print("二维码已保存为 wx_qrcode.png，请扫码登录...")
             self.HasCode = True
