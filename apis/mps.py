@@ -387,6 +387,8 @@ async def update_mps(
             hint = ""
             if any(k in err for k in ("401", "鉴权", "-2013", "-2012", "登录超时", "登录态")):
                 hint = " 微信读书 Cookie 已失效，请到「微信读书管理」页重新扫码授权或更新 Cookie。"
+            elif "-2041" in err:
+                hint = " 微信读书文章列表接口被风控拦截(-2041)，请稍后再试，或到「微信读书管理」页重新扫码授权换取新登录态。"
             print(f"更新公众号文章失败 [{mp.mp_name}]: {err}")
             return error_response(
                 code=50002,

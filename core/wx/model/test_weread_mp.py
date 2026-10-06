@@ -67,7 +67,8 @@ class WereadMpParsingTest(unittest.TestCase):
             parse_mp_articles({"errCode": -2041, "errMsg": "request blocked"})
 
         self.assertEqual(caught.exception.code, -2041)
-        self.assertFalse(caught.exception.retriable)
+        # -2041 为可临时解除的风控拦截，应允许后续轮次重试
+        self.assertTrue(caught.exception.retriable)
 
     def test_extract_mp_content_returns_article_body(self):
         html = """

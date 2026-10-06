@@ -69,7 +69,9 @@ def _raise_response_error(payload: dict):
     raise WereadMPAPIError(
         code,
         message,
-        retriable=code not in (-2041, -2012, -2010),
+        # -2012/-2010 为登录态失效，重登前重试无意义，标记不可重试；
+        # -2041 是风控拦截（可临时解除），应允许任务调度在后续轮次重试。
+        retriable=code not in (-2012, -2010),
     )
 
 
@@ -164,29 +166,41 @@ class MpsWereadMP(MpsWeread):
     def _get_mp_articles_page(self, book_id: str, offset=0):
         # /web/mp/articles 曾在部分旧 Cookie 上返回 -2041，当时据此回退到 cover 方案；
         # 实测该列表接口可用，是增量补抓的主路径。失败时由 get_Articles 回退 cover。
-        try:
-            response = requests.get(
-                f"{WEREAD_WEB_BASE}/web/mp/articles",
-                params={"bookId": book_id, "offset": offset},
-                headers=self._request_headers(include_ticket=True),
-                proxies=self._get_proxies(),
-                timeout=(10, 30),
-            )
-        except requests.RequestException as exc:
-            raise WereadMPAPIError("network_error", str(exc)) from exc
-        if response.status_code != 200:
-            raise WereadMPAPIError(
-                response.status_code,
-                f"article list returned HTTP {response.status_code}",
-            )
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise WereadMPAPIError("invalid_json", "article list is not JSON") from exc
-        if not isinstance(payload, dict):
-            raise WereadMPAPIError("invalid_response", "article list is not an object")
-        _raise_response_error(payload)
-        return payload
+        # -2041 是账号级风控拦截（可能临时解除），碰到时短暂等待后重试一次再判定。
+        for attempt in range(2):
+            try:
+                response = requests.get(
+                    f"{WEREAD_WEB_BASE}/web/mp/articles",
+                    params={"bookId": book_id, "offset": offset},
+                    headers=self._request_headers(include_ticket=True),
+                    proxies=self._get_proxies(),
+                    timeout=(10, 30),
+                )
+            except requests.RequestException as exc:
+                raise WereadMPAPIError("network_error", str(exc)) from exc
+            if response.status_code != 200:
+                raise WereadMPAPIError(
+                    response.status_code,
+                    f"article list returned HTTP {response.status_code}",
+                )
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise WereadMPAPIError("invalid_json", "article list is not JSON") from exc
+            if not isinstance(payload, dict):
+                raise WereadMPAPIError("invalid_response", "article list is not an object")
+            try:
+                _raise_response_error(payload)
+            except WereadMPAPIError as exc:
+                if exc.code == -2041 and attempt == 0:
+                    print_warning(
+                        f"微信读书文章列表接口被风控拦截(-2041)，等待后重试 "
+                        f"{book_id} offset={offset}"
+                    )
+                    time.sleep(max(self._get_page_interval(), 1) * 5)
+                    continue
+                raise
+            return payload
 
     def _get_mp_cover(self, book_id: str) -> dict:
         """获取公众号最新一篇文章（列表接口不可用时的兜底入口）。
