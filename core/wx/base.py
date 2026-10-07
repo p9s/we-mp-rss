@@ -65,14 +65,18 @@ class WxGather:
         - web          : 旧版 Web 浏览器模式（同 app，多一层 HTML 清洗）
         - api          : 旧版 API 模式（appmsg 接口 + requests 内容抓取）
         - auto         : 自动降级，从 free_publish → playwright 依次尝试
-        - weread       : 微信读书通道，采集书架笔记、划线和书评
+- weread       : 微信读书通道，采集书架笔记、划线和书评
         - weread_mp    : 微信读书 Web 通道，采集公众号文章与正文
+        - album        : 公众号合集(album)通道，公开接口，无需登录
         """
         type=type or cfg.get("gather.model","web")
         print(f"采集模式:{type}")
         if type=="free_publish":
             from core.wx.model.free_publish import MpsFreePublish
             wx=MpsFreePublish()
+        elif type=="album":
+            from core.wx.model.album import MpsAlbum
+            wx=MpsAlbum()
         elif type=="playwright":
             from core.wx.model.playwright_mp import MpsPlaywright
             wx=MpsPlaywright()
