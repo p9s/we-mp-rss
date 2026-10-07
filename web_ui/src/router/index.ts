@@ -241,6 +241,15 @@ const routes = [
         }
       },
       {
+        path: 'albums',
+        name: 'AlbumManagement',
+        component: () => import('@/views/AlbumManagement.vue'),
+        meta: {
+          requiresAuth: true,
+          permissions: ['wechat:manage']
+        }
+      },
+      {
         path: 'weread',
         name: 'WereadManagement',
         component: () => import('@/views/WereadManagement.vue'),

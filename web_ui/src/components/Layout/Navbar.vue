@@ -83,18 +83,13 @@
         </template>
         异常统计
       </a-menu-item>
-       <a-menu-item key="/configs">
+<a-menu-item key="/configs">
         <template #icon>
           <icon-settings />
         </template>
         配置信息
       </a-menu-item>
-      <a-menu-item key="/sys-info">
-        <template #icon>
-          <icon-info-circle />
-        </template>
-        系统信息
-      </a-menu-item>
+
     </a-menu>
   </a-layout-header>
 </template>
@@ -125,3 +120,4 @@ const handleMenuClick = (key: string) => {
   })
 }
 </script>
+
