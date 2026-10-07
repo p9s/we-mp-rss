@@ -1,1 +1,0 @@
-import{v as e}from"./http-BS3v0gOO.js";export{e as getArticles};

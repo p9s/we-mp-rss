@@ -83,7 +83,13 @@
         </template>
         异常统计
       </a-menu-item>
-<a-menu-item key="/configs">
+      <a-menu-item key="/albums">
+        <template #icon>
+          <icon-folder />
+        </template>
+        公众号合集
+      </a-menu-item>
+      <a-menu-item key="/configs">
         <template #icon>
           <icon-settings />
         </template>
